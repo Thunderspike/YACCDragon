@@ -7,6 +7,7 @@
     #define _CHAR_TYPE 2
     #define _BOOL_TYPE 3
 
+    #include "dragon.tab.h"
     #include <stdio.h>
     #include <stdlib.h>
     #include <search.h>
@@ -15,6 +16,7 @@
     // Lex/YACC utilities
     int yylex();
     int yyerror(char *s);
+    extern int yylineno;
 
     // Symbol table utilities
     typedef struct Scope {
@@ -41,7 +43,11 @@
     void printScopeSymbols(Scope*);
 
     Scope* currScope_p = NULL;
+    
 %}
+
+// %define api.location.type {location_t}
+%locations
 
 %union {
     char* strVal;
@@ -55,26 +61,35 @@
 %%
 program     :       block                   {
     // top = null;
-    currScope_p = (Scope *) malloc(sizeof(Scope));
+    printf("\n");
 }
             ;
 block       :       LBRACKET         {
+    // printf("\nblock - '{' ... ");
     // creates top scope
     printf("\n{"); 
     createScope();
 }
-                    decls stmts 
+                    decls stmts     { 
+    // printf("\nblock - ... block stmts ..."); 
+}
                     RBRACKET        {
+    // printf("\n\nblock - ... '}'");
     // printScopeSymbols(currScope_p);
     // pops scope 1 level
     currScope_p = currScope_p->enclosingScope_p;
-    printf("\n}\n"); 
+    printf("\n}"); 
 }
             ;
-decls       :       %empty          {}
-            |       decls decl      {}
+decls       :       %empty          {
+    // printf("\ndecls - empty");
+}
+            |       decls decl      {
+    // printf("\ndecls - decls decl ");
+}
             ;
 decl        :       TYPE_ ID {
+    // printf("\ndecl - TYPE_ ID ...");
     char* typeStr = (char *) malloc(sizeof(STR_SIZE));
     if($1 == _INT_TYPE) {
         strcpy(typeStr, "int");
@@ -85,32 +100,47 @@ decl        :       TYPE_ ID {
     }
     add(currScope_p, createSymbol(typeStr, (char *) $2));
 }
-            ENDSTMT                 {}
+                    ENDSTMT         { 
+    // printf("\ndecl - ... ';'"); 
+}
+            |       ENDSTMT   {
+    // printf("\ndecl - _error_ ';'");
+    printf("\n\t--- ';' is an invalid stmt { line: %d, col: %d }\n", 
+        yylloc.first_line, yylloc.first_column 
+    );
+}
             ;       
-stmts       :       %empty          {}
-            |       stmts stmt      {}
+stmts       :       %empty          {
+    // printf("\nstmts - empty");
+}
+            |       stmts stmt      {
+    // printf("\nstmts - stmts stmt");
+}          
             ;
-stmt        :       block           {}
-            |       factor          {}
-                    ENDSTMT         {
-    printf("; ");
+stmt        :       block           {
+    // printf("\nstmt - block");
+}
+            |       factor          {
+    // printf("\nstmt - factor"); // empty endstmt
 }
             ;
-factor      :       ID                      {
+factor      :       ID {
     Symbol* ret = (Symbol *) malloc(sizeof(Symbol));
     ret = get(currScope_p, $1);
     if(ret) {
-        printf("\n\t%s:%s", ret->lexeme, ret->type);
+        printf("\n\t%s:%s;", ret->lexeme, ret->type);
+    } else {
+        printf("\n\t--- variable '%s' is not in scope - { line: %d, col: %d }\n", 
+        $1, yylloc.first_line, yylloc.first_column );
     }
-}
+}                   ENDSTMT
             ;            
 %%
 
 int yyerror(char* s) {
-	printf("\n\tSyntax Error: '%s'\n", s);
+	// printf("\n\t--- %s - { line: %d, col: %d }\n", s, yylloc.first_line, yylloc.first_column );
 	return 0;
 }
-
 
 Symbol* createSymbol(char type[255], char lexeme[255]) {
     Symbol* nSymbol_p = (Symbol *) malloc(sizeof(Symbol));
@@ -124,6 +154,7 @@ Symbol* createSymbol(char type[255], char lexeme[255]) {
 
 void createScope() {
     if(!currScope_p) {
+        currScope_p = (Scope *) malloc(sizeof(Scope));
         currScope_p = _newScope();
         currScope_p->enclosingScope_p = NULL;
         currScope_p->isTopScope = 1;
@@ -259,5 +290,7 @@ void printScopeSymbols(Scope* scope_p) {
 }
 
 int main (void) {
-  return yyparse ();
+    yylloc.first_line = yylloc.last_line = 1;
+    yylloc.first_column = yylloc.last_column = 0;
+    return yyparse ();
 }

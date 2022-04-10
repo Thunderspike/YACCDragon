@@ -25,9 +25,9 @@ factor      ->  id                  { s = top.get(id.lexeme);
 
 ```
 { 
-    int x; char y; z;
+    int x; char y;  ;
     {  
-        bool y; x; y; 
+        bool y; x; y; z;
     } 
     x; y; 
 }
